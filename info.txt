@@ -1,0 +1,16 @@
+[ID:mod_load_order]
+[NUMERIC_VERSION:3]
+[DISPLAYED_VERSION:1.2]
+[EARLIEST_COMPATIBLE_NUMERIC_VERSION:1]
+[EARLIEST_COMPATIBLE_DISPLAYED_VERSION:1.0]
+[AUTHOR:Chibbz]
+[NAME:Mod Load Order]
+[DESCRIPTION:Requires DFHack. Adds a panel to the Mods screen that checks your active mod list and fixes it: load order rules, missing and conflicting mods, hidden conflicts found in the raw files, newer versions, undo and presets. No need to activate it in your mod list - just subscribe.]
+
+[STEAM_TITLE:Mod Load Order (DFHack)]
+[STEAM_DESCRIPTION:Requires DFHack. Adds a panel to the Create world / Mods screen that checks your active mod list and helps fix it. Fixes load order using each mod's "must be before / after" rules, removes conflicting mods in one batch (asks first), alerts you to missing required mods, scans the mods' raw files for hidden conflicts and graphics overlaps, suggests order changes for mods with no rules, switches to newer installed versions, and warns before you create a world with problems. Everything can be undone. You don't need to activate it in your mod list - subscribing is enough.]
+[STEAM_TAG:dfhack]
+[STEAM_TAG:tool]
+[STEAM_TAG:interface]
+
+[STEAM_FILE_ID:3844479443]

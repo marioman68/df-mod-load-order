@@ -1,0 +1,4 @@
+# local leftovers
+*.backup
+*.zip
+__pycache__/
