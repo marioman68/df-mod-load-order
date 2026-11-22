@@ -70,6 +70,10 @@ mod-load-order scan     print raw-file scan results
   - `SELECT_`/`CUT_` edits should load after the mod that defines the object.
 - The list is changed through the same game data DFHack's own Mod Manager uses.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 MIT - see [LICENSE](LICENSE).
