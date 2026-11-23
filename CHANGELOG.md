@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5 – Graphics overlaps retired (for now)
+
+- The Graphics overlaps section has been removed from the Hidden conflicts tab, along with its count on the Overview tab, the panel and the Mod info tab.
+- Which mod's artwork should win is really a matter of taste, and acting on these could leave a world looking worse than before (newer vanilla art is often the better choice). Graphics order is now left entirely to each mod's own load-order rules, which the tool still checks and fixes.
+- The detection itself is still built in, so this can come back in a smarter form later.
+
 ## 1.4 – Safer graphics suggestions
 
 - Fixed a bad suggestion: when a vanilla graphics mod loads before a graphics mod, the tool no longer suggests moving the mod above vanilla. Newer vanilla versions often have their own (better) graphics for the same things, and moving an older graphics mod above them could make them look worse (for example boxy-looking grass with Detailed Landscapes).

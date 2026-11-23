@@ -22,7 +22,7 @@ A small panel appears on the Mods screen showing the state of your mod list
 |---|---|
 | **Overview** | Status of every check at a glance, and whether your default Mod Manager preset matches the current list |
 | **Problems** | Mods out of order, missing required mods, declared conflicts |
-| **Hidden conflicts** | Things two mods both define, found by scanning their raw files: duplicate objects (DF errors) and graphics overlaps (not game-breaking - the mod loaded first wins), each with a one-click "Move it above…" link |
+| **Hidden conflicts** | Things two mods both define, found by scanning their raw files: duplicate objects, which DF reports as errors |
 | **Suggestions** | Order changes based on what the mods' files do: a mod that changes something another mod adds has to load after it |
 | **Versions** | Active mods that have a newer version installed |
 | **Mod info** | Pick any mod to see its rules (ok / WRONG / MISSING) and which other mods depend on it |
@@ -74,10 +74,9 @@ mod-load-order scan     print raw-file scan results
 - The raw-file scan reads every active mod's `objects/` and `graphics/` files (well under a second).
   - Two mods fully defining the same object is reported as a duplicate, unless the later mod
     `CUT_`s the object first (an intentional replacement).
-  - For graphics and tile pages, the **first** loaded definition wins - which is why graphics mods
-    ask to be loaded above the vanilla graphics.
-    Overlaps are only ever shown as optional: the mod that wins may be the better-looking one
-    (newer vanilla versions often have their own graphics for things older graphics mods covered).
+  - Graphics overlaps (two mods drawing the same thing - the first one loaded wins) are worked out
+    but not shown for now: which art is "right" is a matter of taste, so the tool leaves graphics
+    order to each mod's own rules. Set `SHOW_GRAPHICS_OVERLAPS = true` in the script to see them.
   - `SELECT_`/`CUT_` edits should load after the mod that defines the object.
 - The list is changed through the same game data DFHack's own Mod Manager uses.
 

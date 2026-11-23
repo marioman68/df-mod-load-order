@@ -1,6 +1,6 @@
 [ID:mod_load_order]
-[NUMERIC_VERSION:5]
-[DISPLAYED_VERSION:1.4]
+[NUMERIC_VERSION:6]
+[DISPLAYED_VERSION:1.5]
 [EARLIEST_COMPATIBLE_NUMERIC_VERSION:1]
 [EARLIEST_COMPATIBLE_DISPLAYED_VERSION:1.0]
 [AUTHOR:Chibbz]
@@ -8,10 +8,10 @@
 [DESCRIPTION:Requires DFHack. Adds a panel to the Mods screen that checks your active mod list and fixes it: load order rules, missing and conflicting mods, hidden conflicts found in the raw files, newer versions, undo and presets. No need to activate it in your mod list - just subscribe.]
 
 [STEAM_TITLE:Mod Load Order (DFHack)]
-[STEAM_DESCRIPTION:Requires DFHack. Adds a panel to the Create world / Mods screen that checks your active mod list and helps fix it. Fixes load order using each mod's "must be before / after" rules, removes conflicting mods in one batch (asks first), alerts you to missing required mods, scans the mods' raw files for hidden conflicts and graphics overlaps, suggests order changes for mods with no rules, switches to newer installed versions, and warns before you create a world with problems. Everything can be undone. You don't need to activate it in your mod list - subscribing is enough.]
+[STEAM_DESCRIPTION:Requires DFHack. Adds a panel to the Create world / Mods screen that checks your active mod list and helps fix it. Fixes load order using each mod's "must be before / after" rules, removes conflicting mods in one batch (asks first), alerts you to missing required mods, scans the mods' raw files for hidden conflicts, suggests order changes for mods with no rules, switches to newer installed versions, and warns before you create a world with problems. Everything can be undone. You don't need to activate it in your mod list - subscribing is enough.]
 [STEAM_TAG:dfhack]
 [STEAM_TAG:tool]
 [STEAM_TAG:interface]
-[STEAM_CHANGELOG:v1.4 - Fixed a bad suggestion: when a vanilla graphics mod loads before a graphics mod, the tool no longer suggests moving the mod above vanilla. Newer vanilla versions often have their own (better) graphics for the same things, and moving an older graphics mod above them could make them look worse (e.g. boxy grass with Detailed Landscapes). These now show under Hidden conflicts as optional graphics overlaps, with a link to move the mod only if you prefer its look. Note: mod order is fixed when a world is created, so this only affects new worlds.]
+[STEAM_CHANGELOG:v1.5 - Graphics overlaps retired for now. The Graphics overlaps section has been removed from the Hidden conflicts tab, along with its count on the Overview tab, the panel and the Mod info tab. Which mod's artwork should win is really a matter of taste, and acting on these could leave a world looking worse than before - newer vanilla art is often the better choice. Graphics order is now left to each mod's own load-order rules, which the tool still checks and fixes. The detection is still built in, so it can come back in a smarter form later.]
 
 [STEAM_FILE_ID:3844479443]

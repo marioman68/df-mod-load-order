@@ -36,6 +36,11 @@ local WORKSHOP_SEARCH = 'https://steamcommunity.com/workshop/browse/?appid=97537
 local WORKSHOP_ITEM = 'https://steamcommunity.com/sharedfiles/filedetails/?id=%s'
 local PRESETS_FILE = 'dfhack-config/mod-manager.json'
 local SELF_ID = 'mod_load_order' -- this tool's own mod ID (see info.txt)
+-- Graphics overlaps (which mod's art wins when two mods draw the same thing)
+-- are switched off for now: whether to "fix" one is a matter of taste, and
+-- acting on them could make a world look worse. The scan still works them out;
+-- set this to true to show them again.
+local SHOW_GRAPHICS_OVERLAPS = false
 
 function get_mod_screen()
     return dfhack.gui.getViewscreenByType(df.viewscreen_new_regionst, 0)
@@ -586,7 +591,8 @@ function scan(vs)
         h.text = ('%s: %s hidden by %s, which loads first (e.g. %s %s). Move it above if you prefer its look.')
             :format(h.mod.name, plural(h.n, 'graphic', true), h.by.name, t:lower(), id)
     end
-    return {duplicates=duplicates, hidden=hidden_list, suggestions=suggestions}
+    return {duplicates=duplicates, suggestions=suggestions,
+        hidden=SHOW_GRAPHICS_OVERLAPS and hidden_list or {}, hidden_all=hidden_list}
 end
 
 -- Scan only if it's cheap: after the first full scan, mods added since then
@@ -1409,7 +1415,9 @@ function OverviewPage:build(r, vs)
     row('Required mods', counts.missing, COLOR_LIGHTRED, 'all present', '%d missing', 'Problems')
     row('Declared conflicts', counts.conflict, COLOR_LIGHTRED, 'none', '%d conflicting pairs', 'Problems')
     row('Duplicate objects', result and #result.duplicates, COLOR_LIGHTRED, 'none', '%d - worth fixing', 'Hidden conflicts')
-    row('Graphics overlaps', result and #result.hidden, COLOR_YELLOW, 'none', '%d - not game-breaking', 'Hidden conflicts')
+    if SHOW_GRAPHICS_OVERLAPS then
+        row('Graphics overlaps', result and #result.hidden, COLOR_YELLOW, 'none', '%d - not game-breaking', 'Hidden conflicts')
+    end
     row('Suggestions', result and #result.suggestions, COLOR_LIGHTCYAN, 'none', '%d available', 'Suggestions')
     row('Newer versions', #updates, COLOR_LIGHTCYAN, 'all up to date', '%d installed', 'Versions')
 
@@ -1487,6 +1495,7 @@ function HiddenPage:build(r, vs)
         r.detail{{'Fix: ', COLOR_GREY}, {'remove one of them', COLOR_LIGHTGREEN}, {' (move it to the left list).', COLOR_GREY}}
     end
 
+    if not SHOW_GRAPHICS_OVERLAPS then return end
     r.section('Graphics overlaps', #result.hidden > 0 and #result.hidden or nil, 'optional')
     if #result.hidden == 0 then
         r.line{{CHECK .. 'None.', COLOR_LIGHTGREEN}}
@@ -1516,7 +1525,7 @@ SuggestionsPage = defclass(nil, ReportPage)
 
 function SuggestionsPage:build(r, vs)
     r.line{{'Based on what the mods\' files do: a mod that changes something another mod adds', COLOR_GREY}}
-    r.line{{'has to load after that mod. (Graphics overlaps are optional - see Hidden conflicts.)', COLOR_GREY}}
+    r.line{{'has to load after that mod.', COLOR_GREY}}
     r.line{{'Never applied automatically - click a ', COLOR_GREY}, {LINK_ARROW .. ' Move', COLOR_LIGHTGREEN},
         {' link to apply one, or press ', COLOR_GREY}, {'s', COLOR_LIGHTGREEN}, {' to apply them all.', COLOR_GREY}}
     local result = self:scan_result(r, vs)
