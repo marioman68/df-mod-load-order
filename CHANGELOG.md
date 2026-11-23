@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4 – Safer graphics suggestions
+
+- Fixed a bad suggestion: when a vanilla graphics mod loads before a graphics mod, the tool no longer suggests moving the mod above vanilla. Newer vanilla versions often have their own (better) graphics for the same things, and moving an older graphics mod above them could make them look worse (for example boxy-looking grass with Detailed Landscapes).
+- These now show under **Hidden conflicts → Graphics overlaps** as optional, with a note that the game has its own graphics for them and a link to move the mod only if you prefer its look.
+- Suggestions now only cover the reliable case: a mod that changes something another mod adds has to load after it.
+- Reminder: mod order is fixed when a world is created, so changes only affect new worlds.
+
 ## 1.3 – Hidden from the mod list, mod descriptions, clearer layout
 
 - Mod Load Order no longer shows up in the mod list. DFHack loads it automatically, so there's nothing to add – subscribing is enough.

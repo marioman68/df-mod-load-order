@@ -529,19 +529,17 @@ function scan(vs)
         end
     end
 
-    -- graphics: the first mod to define something wins
+    -- graphics: the first mod to define something wins. Either way this is
+    -- only an optional overlap - not a suggestion - because the mod that wins
+    -- may well be the better-looking one (e.g. vanilla adding its own art for
+    -- things an older graphics mod used to cover).
     local hidden, sugg = {}, {}
     for k, ps in pairs(providers) do
         local first = ps[1]
         for i = 2, #ps do
             local p = ps[i]
             if not p.vanilla then
-                if first.vanilla then
-                    bump(sugg, p.id .. '\0' .. first.id .. '\0gfx',
-                        {first=p.id, second=first.id, mod=p, other=first, why='gfx'}, k)
-                else
-                    bump(hidden, p.id .. '\0' .. first.id, {mod=p, by=first}, k)
-                end
+                bump(hidden, p.id .. '\0' .. first.id, {mod=p, by=first, by_vanilla=first.vanilla}, k)
             end
         end
     end
@@ -1502,6 +1500,10 @@ function HiddenPage:build(r, vs)
         r.item(COLOR_YELLOW, {{modpos(h.mod), COLOR_WHITE}})
         r.detail{{plural(h.n, 'graphic', true), COLOR_YELLOW}, {' hidden by ', COLOR_GREY},
             {modpos(h.by), COLOR_LIGHTCYAN}, {', which loads first.', COLOR_GREY}}
+        if h.by_vanilla then
+            r.detail{{'The game has its own graphics for these, which may be newer - this mod\'s', COLOR_GREY},
+                {' look will replace them if you move it above.', COLOR_GREY}}
+        end
         r.example(h.example)
         r.detail{{'Prefer its look?  ', COLOR_GREY},
             self:button('Move it above ' .. h.by.name, h.mod.id, h.by.id, 'above')}
@@ -1513,7 +1515,8 @@ end
 SuggestionsPage = defclass(nil, ReportPage)
 
 function SuggestionsPage:build(r, vs)
-    r.line{{'For mods that declare no load-order rules, based on what their raw files do.', COLOR_GREY}}
+    r.line{{'Based on what the mods\' files do: a mod that changes something another mod adds', COLOR_GREY}}
+    r.line{{'has to load after that mod. (Graphics overlaps are optional - see Hidden conflicts.)', COLOR_GREY}}
     r.line{{'Never applied automatically - click a ', COLOR_GREY}, {LINK_ARROW .. ' Move', COLOR_LIGHTGREEN},
         {' link to apply one, or press ', COLOR_GREY}, {'s', COLOR_LIGHTGREEN}, {' to apply them all.', COLOR_GREY}}
     local result = self:scan_result(r, vs)
