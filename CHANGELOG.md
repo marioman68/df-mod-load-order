@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3 – Hidden from the mod list, mod descriptions, clearer layout
+
+- Mod Load Order no longer shows up in the mod list. DFHack loads it automatically, so there's nothing to add – subscribing is enough.
+- If you already added it to your active list, it's left there (it's harmless either way).
+- The Mod info tab now shows each mod's author and full description (read from its info.txt, so descriptions containing a colon are no longer cut short).
+- Easier to read: section headers in every tab now have gold divider lines and yellow names.
+- "All good" results (no problems, no conflicts, nothing to suggest) are now bright green with a check mark.
+
 ## 1.2 – Smaller panel
 
 - The panel on the Mods screen is now about half as wide, so it fits better on smaller screens and lower resolutions.

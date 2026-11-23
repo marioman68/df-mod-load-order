@@ -43,6 +43,7 @@ It also warns you if you click **Create world** while problems remain (click aga
 
 **Steam Workshop:** subscribe. You don't need to activate it in your mod list - DFHack loads
 scripts from `scripts_modinstalled/` for any installed mod.
+It also hides itself from the game's mod list, since there's nothing to add there.
 
 **Manual:** copy `scripts_modinstalled/mod-load-order.lua` into
 `<Dwarf Fortress>/dfhack-config/scripts/`.

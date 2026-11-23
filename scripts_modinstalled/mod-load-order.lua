@@ -35,6 +35,7 @@ local FIELD_SUFFIXES = {
 local WORKSHOP_SEARCH = 'https://steamcommunity.com/workshop/browse/?appid=975370&searchtext=%s'
 local WORKSHOP_ITEM = 'https://steamcommunity.com/sharedfiles/filedetails/?id=%s'
 local PRESETS_FILE = 'dfhack-config/mod-manager.json'
+local SELF_ID = 'mod_load_order' -- this tool's own mod ID (see info.txt)
 
 function get_mod_screen()
     return dfhack.gui.getViewscreenByType(df.viewscreen_new_regionst, 0)
@@ -73,6 +74,8 @@ local function read_active(vs)
             vanilla = hdr.flags.vanilla or hdr.src_dir:startswith('data/vanilla'),
             path = hdr.absolute_path,
             steam_id = hdr.steam_file_id,
+            author = hdr.author,
+            description = hdr.description,
             after = {},    -- ids this mod must load after
             before = {},   -- ids this mod must load before
             requires = {}, -- ids required with no ordering rule
@@ -122,6 +125,23 @@ local function current_keys(vs)
         keys[#keys + 1] = modkey(hdr.id, vs.object_load_order_numeric_version[i])
     end
     return keys
+end
+
+---------------------------------------------------------------------------
+-- hiding this tool from the left list
+
+-- DFHack loads this tool whether or not it's in the mod list, so there's no
+-- point offering it there. Remove our own entry from the available (left)
+-- list; if someone already put it in the active list, leave it alone.
+local function hide_self(vs)
+    for i = #vs.available_mod_header - 1, 0, -1 do
+        if vs.available_mod_header[i].id == SELF_ID then
+            for _, suffix in ipairs({'id', 'numeric_version', 'earliest_compat_numeric_version',
+                    'src_dir', 'name', 'displayed_version', 'mod_header'}) do
+                vs['available_' .. suffix]:erase(i)
+            end
+        end
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -994,8 +1014,13 @@ local HLINE = string.char(196) -- thin horizontal box line in the DF font
 local DOT = string.char(250)   -- small centred dot
 
 -- Section header drawn as a divider:  ─── Title (3)  hint ──────────
+-- section header colours: gold divider lines (like DF's window frames) and
+-- bright yellow names so sections stand apart from their content
+local SECTION_LINE_PEN = COLOR_BROWN
+local SECTION_TITLE_PEN = COLOR_YELLOW
+
 local function section(tokens, width, title, count, hint)
-    local segs = {{HLINE:rep(3) .. ' ', COLOR_GREY}, {title, COLOR_WHITE}}
+    local segs = {{HLINE:rep(3) .. ' ', SECTION_LINE_PEN}, {title, SECTION_TITLE_PEN}}
     local used = 4 + #title
     if count then
         local c = (' (%d)'):format(count)
@@ -1007,7 +1032,7 @@ local function section(tokens, width, title, count, hint)
         used = used + 2 + #hint
         hint = nil
     end
-    table.insert(segs, {' ' .. HLINE:rep(math.max(3, width - used - 1)), COLOR_GREY})
+    table.insert(segs, {' ' .. HLINE:rep(math.max(3, width - used - 1)), SECTION_LINE_PEN})
     for _, seg in ipairs(segs) do table.insert(tokens, {text=seg[1], pen=seg[2]}) end
     table.insert(tokens, NEWLINE)
     if hint then -- didn't fit on the divider line
@@ -1197,6 +1222,7 @@ end
 -- report builder: shared layout for all the tabs
 
 local MARK = string.char(254) .. ' ' -- small square in the DF font
+local CHECK = string.char(251) .. ' ' -- check mark, for 'all good' lines
 LINK_ARROW = string.char(16) -- small right-pointing triangle in the DF font
 
 -- Wraps a token list with helpers for the layout used in every tab:
@@ -1229,6 +1255,21 @@ local function Report(width)
 end
 
 local function modpos(m) return ('%s (#%d)'):format(m.name, m.pos) end
+
+-- Full [DESCRIPTION:...] text from a mod's info.txt, colons included.
+local description_cache = {}
+function full_description(path)
+    if description_cache[path] == nil then
+        local text
+        local f = path and io.open(path .. '/info.txt', 'rb')
+        if f then
+            text = f:read('a'):match('%[DESCRIPTION:(.-)%]')
+            f:close()
+        end
+        description_cache[path] = text or false
+    end
+    return description_cache[path] or nil
+end
 
 -- Does the default Mod Manager preset hold exactly the current list?
 -- Returns name, matches (name is nil when there's no default preset).
@@ -1408,11 +1449,11 @@ function ProblemsPage:build(r, vs)
     for _, i in ipairs(issues) do table.insert(by_kind[i.kind], i) end
 
     r.section('Load order', #by_kind.order > 0 and #by_kind.order or nil, 'f fixes these')
-    if #by_kind.order == 0 then r.line{{'OK - every before/after rule is satisfied.', COLOR_GREEN}} end
+    if #by_kind.order == 0 then r.line{{CHECK .. 'OK - every before/after rule is satisfied.', COLOR_LIGHTGREEN}} end
     for _, i in ipairs(by_kind.order) do r.item(COLOR_YELLOW, {{i.text, COLOR_WHITE}}) end
 
     r.section('Missing required mods', #by_kind.missing > 0 and #by_kind.missing or nil)
-    if #by_kind.missing == 0 then r.line{{'None.', COLOR_GREEN}} end
+    if #by_kind.missing == 0 then r.line{{CHECK .. 'None.', COLOR_LIGHTGREEN}} end
     for _, i in ipairs(by_kind.missing) do
         r.item(COLOR_LIGHTRED, {{i.text, COLOR_WHITE}})
         if not i.installed then
@@ -1421,7 +1462,7 @@ function ProblemsPage:build(r, vs)
     end
 
     r.section('Declared conflicts', #by_kind.conflict > 0 and #by_kind.conflict or nil, 'c removes one of each pair')
-    if #by_kind.conflict == 0 then r.line{{'None.', COLOR_GREEN}} end
+    if #by_kind.conflict == 0 then r.line{{CHECK .. 'None.', COLOR_LIGHTGREEN}} end
     for _, i in ipairs(by_kind.conflict) do r.item(COLOR_LIGHTRED, {{i.text, COLOR_WHITE}}) end
 end
 
@@ -1436,7 +1477,7 @@ function HiddenPage:build(r, vs)
 
     r.section('Duplicate objects', #result.duplicates > 0 and #result.duplicates or nil, 'worth fixing')
     if #result.duplicates == 0 then
-        r.line{{'None.', COLOR_GREEN}}
+        r.line{{CHECK .. 'None.', COLOR_LIGHTGREEN}}
     else
         r.line{{'DF reports these as errors when it loads the mods.', COLOR_LIGHTRED}}
         r.blank()
@@ -1450,7 +1491,7 @@ function HiddenPage:build(r, vs)
 
     r.section('Graphics overlaps', #result.hidden > 0 and #result.hidden or nil, 'optional')
     if #result.hidden == 0 then
-        r.line{{'None.', COLOR_GREEN}}
+        r.line{{CHECK .. 'None.', COLOR_LIGHTGREEN}}
     else
         r.line{{'Not game-breaking if left alone', COLOR_LIGHTGREEN},
             {' - the mod that loads first decides the look.', COLOR_GREY}}
@@ -1478,7 +1519,7 @@ function SuggestionsPage:build(r, vs)
     local result = self:scan_result(r, vs)
     if not result then return end
     r.section('Suggestions', #result.suggestions > 0 and #result.suggestions or nil)
-    if #result.suggestions == 0 then r.line{{'None - nothing to suggest.', COLOR_GREEN}} end
+    if #result.suggestions == 0 then r.line{{CHECK .. 'None - nothing to suggest.', COLOR_LIGHTGREEN}} end
     for _, s in ipairs(result.suggestions) do
         r.item(COLOR_LIGHTCYAN, {{modpos(s.mod), COLOR_WHITE}})
         if s.why == 'gfx' then
@@ -1504,7 +1545,7 @@ function VersionsPage:build(r, vs)
     r.line{{'Active mods that have a newer version installed (e.g. a Workshop update).', COLOR_GREY}}
     local updates = find_updates(vs)
     r.section('Newer versions', #updates > 0 and #updates or nil, 'v switches to them')
-    if #updates == 0 then r.line{{'All active mods are the newest installed version.', COLOR_GREEN}} end
+    if #updates == 0 then r.line{{CHECK .. 'All active mods are the newest installed version.', COLOR_LIGHTGREEN}} end
     for _, u in ipairs(updates) do
         r.item(COLOR_LIGHTCYAN, {{u.name, COLOR_WHITE}})
         r.detail{{'Using ', COLOR_GREY}, {u.from, COLOR_YELLOW}, {' - newer ', COLOR_GREY},
@@ -1578,7 +1619,17 @@ function ModInfoPage:show_mod()
 
     r.line({{m.name, COLOR_YELLOW}, {'  ' .. m.displayed_version, COLOR_GREY}}, '')
     r.line({{('id %s, position #%d%s'):format(m.id, m.pos, m.vanilla and ', vanilla' or ''), COLOR_DARKGREY}}, '')
+    if m.author and m.author ~= '' then r.line({{'by ', COLOR_DARKGREY}, {m.author, COLOR_GREY}}, '') end
     if m.steam_id ~= 0 then r.line({{WORKSHOP_ITEM:format(tostring(m.steam_id)), COLOR_DARKGREY}}, '') end
+
+    -- the mod's own description, read from its info.txt (the game's copy is
+    -- cut off at the first ':' in the text)
+    local desc = (full_description(m.path) or m.description or '')
+        :gsub('%s+', ' '):gsub('^ ', ''):gsub(' $', '')
+    if desc ~= '' then
+        r.section('Description')
+        r.line({{desc, COLOR_WHITE}})
+    end
 
     r.section('Its rules')
     for _, id in ipairs(m.after) do local o = by_id[id]; rule('Must load after', id, o and o.pos < m.pos) end
@@ -1910,6 +1961,7 @@ local function get_counts()
     if cache.counts and now - cache.tick < 500 then return cache.counts end
     local counts = {order=0, missing=0, conflict=0, notes=0}
     local vs = get_mod_screen()
+    if vs then hide_self(vs) end -- presets can put it back, so keep checking
     for _, issue in ipairs(check(vs) or {}) do counts[issue.kind] = counts[issue.kind] + 1 end
     if vs then
         counts.notes = #find_updates(vs)
