@@ -1,17 +1,13 @@
 # Changelog
 
-## 1.5 – Graphics overlaps retired (for now)
+## 1.4 – Mods tab, color-coded conflicts, Add/Remove all
 
-- The Graphics overlaps section has been removed from the Hidden conflicts tab, along with its count on the Overview tab, the panel and the Mod info tab.
-- Which mod's artwork should win is really a matter of taste, and acting on these could leave a world looking worse than before (newer vanilla art is often the better choice). Graphics order is now left entirely to each mod's own load-order rules, which the tool still checks and fixes.
-- The detection itself is still built in, so this can come back in a smarter form later.
-
-## 1.4 – Safer graphics suggestions
-
-- Fixed a bad suggestion: when a vanilla graphics mod loads before a graphics mod, the tool no longer suggests moving the mod above vanilla. Newer vanilla versions often have their own (better) graphics for the same things, and moving an older graphics mod above them could make them look worse (for example boxy-looking grass with Detailed Landscapes).
-- These now show under **Hidden conflicts → Graphics overlaps** as optional, with a note that the game has its own graphics for them and a link to move the mod only if you prefer its look.
-- Suggestions now only cover the reliable case: a mod that changes something another mod adds has to load after it.
-- Reminder: mod order is fixed when a world is created, so changes only affect new worlds.
+- **Mods tab** – browse, search (`f`), load/unload (`Enter` or double-click, automatically placed by load-order rules), and manually reorder (`w`/`s`) mods without leaving the window.
+- **Batch actions** – added **Add all** (`Shift+A`, picks the newest version of each mod) and **Remove all** (`Shift+X`, keeps base-game vanilla mods loaded), both undoable with `u`.
+- **Dividers & readability** – added thin frame dividers separating the panes on the Mods and Mod info tabs, with single-side selection highlighting so only the list you last clicked is highlighted.
+- **Color-coded lists & details** – unloaded mods in cyan, loaded mods in green, vanilla mods in grey, out-of-order mods in yellow, and conflicting / missing-requirement / duplicate-object mods in red across both the Mods and Mod info tabs, with conflict reasons shown directly in the info pane.
+- **Mod info improvements** – "Other mods' rules about it" now also lists mods that declare a conflict with the selected mod.
+- **Scan & multi-version fixes** – graphics overlap notices are switched off by default (`SHOW_GRAPHICS_OVERLAPS = false`), raw-file scanning ignores non-object `SELECT_*` sub-tokens (such as `SELECT_SYMBOL` in entities), and unloading or undoing a multi-version mod now restores all installed versions to the available list.
 
 ## 1.3 – Hidden from the mod list, mod descriptions, clearer layout
 

@@ -1,17 +1,63 @@
 [ID:mod_load_order]
-[NUMERIC_VERSION:6]
-[DISPLAYED_VERSION:1.5]
+[NUMERIC_VERSION:5]
+[DISPLAYED_VERSION:1.4]
 [EARLIEST_COMPATIBLE_NUMERIC_VERSION:1]
 [EARLIEST_COMPATIBLE_DISPLAYED_VERSION:1.0]
 [AUTHOR:Chibbz]
 [NAME:Mod Load Order]
-[DESCRIPTION:Requires DFHack. Adds a panel to the Mods screen that checks your active mod list and fixes it: load order rules, missing and conflicting mods, hidden conflicts found in the raw files, newer versions, undo and presets. No need to activate it in your mod list - just subscribe.]
+[DESCRIPTION:Requires DFHack. Adds a panel to the Mods screen that checks your active mod list and helps fix load order rules, missing and conflicting mods, duplicate object conflicts, newer versions, undo, presets, and a color-coded Mods tab to search, load, unload, and reorder mods. No need to activate it in your mod list - just subscribe.]
 
 [STEAM_TITLE:Mod Load Order (DFHack)]
-[STEAM_DESCRIPTION:Requires DFHack. Adds a panel to the Create world / Mods screen that checks your active mod list and helps fix it. Fixes load order using each mod's "must be before / after" rules, removes conflicting mods in one batch (asks first), alerts you to missing required mods, scans the mods' raw files for hidden conflicts, suggests order changes for mods with no rules, switches to newer installed versions, and warns before you create a world with problems. Everything can be undone. You don't need to activate it in your mod list - subscribing is enough.]
+[STEAM_DESCRIPTION:Requires DFHack. Subscribe only - you do not need to activate this mod in your mod list (DFHack loads it automatically and it hides itself from the list).
+
+Adds a compact status panel and a full tabbed window to the Create world -> Mods screen so you can manage, check, and fix your active mod list before generating a world.
+
+========================================
+FEATURES
+========================================
+
+- Mods Tab - Browse, search (f), load/unload (Enter or double-click, automatically placed by load-order rules), manually reorder (w / s), and batch Add all (Shift+A) or Remove all non-vanilla mods (Shift+X) alongside each mod's full description.
+- Live Color Highlighting - Conflicting, missing-requirement, and duplicate-object mods light up in red, out-of-order mods in yellow, loaded custom mods in green, unloaded mods in cyan, and vanilla base-game modules in grey.
+- Fix Load Order (f / a) - Automatically satisfies every mod's "must be before / after" rules while moving as few mods as possible and leaving vanilla mods in place.
+- Batch Conflict Removal (c / a) - Reviews all declared conflicts in one checklist with suggested removals pre-ticked and removes them in a single confirmation.
+- Missing Required Mods (l) - Flags missing dependencies and copies Steam Workshop search links to your clipboard for mods you do not have installed.
+- Raw-File Scanner (r) - Scans active mod raws for hidden duplicate object definitions (DF errors) and suggests load-order fixes for mods that edit objects without declaring rules.
+- Version Checker (v) - Spots active mods that have a newer installed version and switches to them in one step.
+- Mod Info Inspector - Pick any active mod to see its author, full description, declared rules, other mods that depend on or conflict with it, and raw-file summary.
+- Undo & Mod Manager Presets (u / p) - Undo up to 30 changes and save your fixed list directly to your DFHack Mod Manager preset.
+- Create World Guard - Warns you if you click Create world while problems remain (click again within 30 seconds to proceed anyway).
+
+========================================
+QUICK KEYS
+========================================
+
+- d - Open the Mod Load Order details window
+- a - Fix all (resolve conflicts, then fix load order)
+- f - Filter mods (Mods tab) / Fix load order (Problems tab)
+- w / s - Move selected loaded mod up / down (Mods tab)
+- Shift+A / Shift+X - Add all / Remove all non-vanilla mods (Mods tab)
+- c - Remove declared conflicts (Problems tab)
+- v - Switch to newest installed versions (Versions tab)
+- u - Undo last change
+- p - Save as DFHack Mod Manager preset
+- r - Rescan raw files
+
+========================================
+INSTALL
+========================================
+
+Subscribe on Steam Workshop with DFHack enabled. No activation in the Mods screen is required.
+]
 [STEAM_TAG:dfhack]
 [STEAM_TAG:tool]
 [STEAM_TAG:interface]
-[STEAM_CHANGELOG:v1.5 - Graphics overlaps retired for now. The Graphics overlaps section has been removed from the Hidden conflicts tab, along with its count on the Overview tab, the panel and the Mod info tab. Which mod's artwork should win is really a matter of taste, and acting on these could leave a world looking worse than before - newer vanilla art is often the better choice. Graphics order is now left to each mod's own load-order rules, which the tool still checks and fixes. The detection is still built in, so it can come back in a smarter form later.]
+[STEAM_CHANGELOG:v1.4 - Mods tab, color-coded conflicts, and batch controls
+
+- Added a Mods tab with dividers to search (f), load/unload with automatic rule placement, manually reorder (w/s), and batch Add all (Shift+A) / Remove all non-vanilla mods (Shift+X) alongside full descriptions.
+- Color-coded the Mods and Mod info tabs so conflicting, missing-dependency, and duplicate-object mods highlight in red, out-of-order mods in yellow, loaded custom mods in green, and vanilla mods in grey, with conflict details shown in the info pane.
+- Added the running version label (v1.4) to the bottom-right of the window.
+- Mod info now also lists other mods that declare a conflict with the selected mod.
+- Switched off graphics overlap notices by default, improved raw-file scan accuracy, and fixed multi-version mods restoring all versions when unloaded or undone.
+]
 
 [STEAM_FILE_ID:3844479443]

@@ -1,12 +1,4 @@
-<p align="center">
-  <img src="preview.png" alt="Mod Load Order" width="320">
-</p>
-
-<h1 align="center">Mod Load Order</h1>
-
-<p align="center"><b>A DFHack tool that checks and fixes your Dwarf Fortress mod list.</b><br>
-<a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3844479443">Steam Workshop</a></p>
-
+# Mod Load Order (DFHack)
 
 A [DFHack](https://store.steampowered.com/app/2346660/DFHack__Dwarf_Fortress_Modding_Engine/) tool for
 Dwarf Fortress (Steam) that checks your active mod list on the **Create world → Mods** screen and helps fix it.
@@ -21,11 +13,12 @@ A small panel appears on the Mods screen showing the state of your mod list
 | Tab | What it shows |
 |---|---|
 | **Overview** | Status of every check at a glance, and whether your default Mod Manager preset matches the current list |
+| **Mods** | Browse, search (`f`), load/unload (`Enter` or double-click, with automatic placement by load-order rules), reorder (`w`/`s`), and batch **Add all** (`Shift+A`) / **Remove all** (`Shift+X`), with dividers, full descriptions, and red/yellow conflict & order highlighting |
 | **Problems** | Mods out of order, missing required mods, declared conflicts |
-| **Hidden conflicts** | Things two mods both define, found by scanning their raw files: duplicate objects, which DF reports as errors |
-| **Suggestions** | Order changes based on what the mods' files do: a mod that changes something another mod adds has to load after it |
+| **Hidden conflicts** | Duplicate object definitions found by scanning raw files (DF errors) |
+| **Suggestions** | Order changes for mods that declare no rules, based on what their files edit |
 | **Versions** | Active mods that have a newer version installed |
-| **Mod info** | Pick any mod to see its rules (ok / WRONG / MISSING) and which other mods depend on it |
+| **Mod info** | Pick any mod from a color-coded list to see its author, full description, rules (ok / WRONG / MISSING), and which other mods depend on or conflict with it |
 
 ![Hidden conflicts tab](screenshots/hidden-conflicts.png)
 
@@ -34,9 +27,11 @@ A small panel appears on the Mods screen showing the state of your mod list
 | Key | Action |
 |---|---|
 | `a` | **Fix all** - remove declared conflicts (one checklist, one confirmation), then fix the load order |
-| `f` | **Fix order** - reorder the list so every "must be before / after" rule is satisfied, moving as few mods as possible and leaving vanilla mods in place |
+| `f` | **Fix order** (Problems tab) / **Filter** (Mods tab) |
+| `w` / `s` | **Move up / Move down** (Mods tab, loaded list) |
+| `A` / `X` | **Add all / Remove all** non-vanilla mods (Mods tab) |
 | `c` | **Remove conflicts** - batch checklist with suggested removals pre-ticked |
-| `s` | **Apply suggestions** |
+| `s` | **Apply suggestions** (Suggestions tab) |
 | `v` | **Use newest versions** |
 | `u` | **Undo** the last change (up to 30 steps) |
 | `p` | **Save** the list as a DFHack Mod Manager preset (update your default preset so it loads this way next time) |
@@ -74,9 +69,9 @@ mod-load-order scan     print raw-file scan results
 - The raw-file scan reads every active mod's `objects/` and `graphics/` files (well under a second).
   - Two mods fully defining the same object is reported as a duplicate, unless the later mod
     `CUT_`s the object first (an intentional replacement).
-  - Graphics overlaps (two mods drawing the same thing - the first one loaded wins) are worked out
-    but not shown for now: which art is "right" is a matter of taste, so the tool leaves graphics
-    order to each mod's own rules. Set `SHOW_GRAPHICS_OVERLAPS = true` in the script to see them.
+  - For graphics and tile pages, the **first** loaded definition wins - graphics overlap notices
+    are currently switched off by default (`SHOW_GRAPHICS_OVERLAPS` in the script) since visual
+    preference varies by player.
   - `SELECT_`/`CUT_` edits should load after the mod that defines the object.
 - The list is changed through the same game data DFHack's own Mod Manager uses.
 

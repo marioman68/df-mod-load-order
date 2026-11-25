@@ -36,6 +36,7 @@ local WORKSHOP_SEARCH = 'https://steamcommunity.com/workshop/browse/?appid=97537
 local WORKSHOP_ITEM = 'https://steamcommunity.com/sharedfiles/filedetails/?id=%s'
 local PRESETS_FILE = 'dfhack-config/mod-manager.json'
 local SELF_ID = 'mod_load_order' -- this tool's own mod ID (see info.txt)
+local VERSION = '1.4' -- matches DISPLAYED_VERSION in info.txt
 -- Graphics overlaps (which mod's art wins when two mods draw the same thing)
 -- are switched off for now: whether to "fix" one is a matter of taste, and
 -- acting on them could make a world look worse. The scan still works them out;
@@ -187,13 +188,18 @@ local function apply_active(vs, keys)
         end
     end
 
-    -- left list = what was there + what left the active list, minus what's
-    -- active now (DF hides other versions of an active mod)
+    -- left list = every installed mod whose id isn't active now (and not
+    -- ourselves, since DFHack loads us automatically). Built from
+    -- base_available so unloading a multi-version mod restores all versions.
     local avail_keys, seen = {}, {}
     local function add_avail(k)
-        if seen[k] or in_new[k] or active_ids[key_id(k)] then return end
+        local id = key_id(k)
+        if seen[k] or in_new[k] or active_ids[id] or id == SELF_ID then return end
         seen[k] = true
         avail_keys[#avail_keys + 1] = k
+    end
+    for i, hdr in ipairs(vs.base_available_mod_header) do
+        add_avail(modkey(hdr.id, vs.base_available_numeric_version[i]))
     end
     for _, k in ipairs(current_keys(vs)) do add_avail(k) end
     for i, hdr in ipairs(vs.available_mod_header) do
@@ -216,6 +222,7 @@ local function apply_active(vs, keys)
             for _, e in ipairs(entries) do vec:insert('#', e[suffix]) end
         end
     end
+    if STATE.overlay_cache then STATE.overlay_cache.counts = nil end
 end
 
 ---------------------------------------------------------------------------
@@ -412,8 +419,6 @@ for obj, toks in pairs(DEFINE_TOKENS) do
     DEFINES[obj] = {}
     for _, t in ipairs(toks) do DEFINES[obj][t] = true end
 end
-local NOT_EDIT_TARGETS = {CASTE=true, ADDITIONAL_CASTE=true, MATERIAL=true,
-    TISSUE=true, TISSUE_LAYER=true, BP=true}
 
 local ITEM_GRAPHICS = {}
 for _, t in ipairs{'ARMOR', 'HELM', 'GLOVES', 'SHOES', 'PANTS', 'SHIELD', 'WEAPON',
@@ -451,7 +456,8 @@ local function scan_file(path, res)
                 res.gfx[tok .. ':' .. arg] = true
             else
                 local verb, typ = tok:match('^(%u+)_([%u_]+)$')
-                if (verb == 'SELECT' or verb == 'CUT') and not NOT_EDIT_TARGETS[typ] then
+                if (verb == 'SELECT' or verb == 'CUT') and defs
+                        and (defs[typ] or (obj == 'ITEM' and typ == 'ITEM')) then
                     local k = norm_type(typ) .. ':' .. arg
                     res.edits[k] = true
                     if verb == 'CUT' then res.cuts[k] = true end
@@ -1567,6 +1573,59 @@ end
 
 -------------------- Mod info ("why is it here")
 
+-- Per-active-mod problem summary (shared by Mod info and Mods tabs):
+-- id -> {severity='red'|'yellow', reasons={{text=, pen=}, ...}}
+local function mod_problems(vs)
+    local mods = read_active(vs)
+    local by_id = index_mods(mods)
+    local names = known_names(vs)
+    local function nm(id) return by_id[id] and by_id[id].name or names[id] or id end
+    local probs = {}
+    local function add(id, sev, text, pen)
+        local p = probs[id]
+        if not p then p = {severity=sev, reasons={}}; probs[id] = p end
+        if sev == 'red' then p.severity = 'red' end
+        table.insert(p.reasons, {text=text, pen=pen})
+    end
+
+    local order = {}
+    for _, m in ipairs(mods) do order[#order + 1] = m.id end
+    for _, e in ipairs(find_violations(order, build_edges(mods))) do
+        local text = e.owner == e.second
+            and ('Must load after ' .. nm(e.first))
+            or ('Must load before ' .. nm(e.second))
+        add(e.owner, 'yellow', text, COLOR_YELLOW)
+    end
+
+    local seen_conflict = {}
+    for _, m in ipairs(mods) do
+        for _, list in ipairs{m.after, m.before, m.requires} do
+            for _, id in ipairs(list) do
+                if not by_id[id] then
+                    add(m.id, 'red', 'Missing required: ' .. nm(id), COLOR_LIGHTRED)
+                end
+            end
+        end
+        for _, id in ipairs(m.conflicts) do
+            local k = m.id < id and (m.id .. '\0' .. id) or (id .. '\0' .. m.id)
+            if by_id[id] and id ~= m.id and not seen_conflict[k] then
+                seen_conflict[k] = true
+                add(m.id, 'red', 'Conflicts with ' .. nm(id), COLOR_LIGHTRED)
+                add(id, 'red', 'Conflicts with ' .. m.name, COLOR_LIGHTRED)
+            end
+        end
+    end
+
+    local ok, res = pcall(scan_if_cached, vs)
+    if ok and res then
+        for _, d in ipairs(res.duplicates) do
+            add(d.a.id, 'red', ('Duplicate %s with %s'):format(plural(d.n, 'object'), d.b.name), COLOR_LIGHTRED)
+            add(d.b.id, 'red', ('Duplicate %s with %s'):format(plural(d.n, 'object'), d.a.name), COLOR_LIGHTRED)
+        end
+    end
+    return probs
+end
+
 ModInfoPage = defclass(nil, widgets.Panel)
 ModInfoPage.ATTRS{window=DEFAULT_NIL}
 
@@ -1574,14 +1633,29 @@ function ModInfoPage:init()
     self:addviews{
         widgets.Label{
             frame={t=0, l=0},
-            text={{text='Pick a mod (up/down or click):', pen=COLOR_GREY}},
+            text={
+                {text='Pick a mod ', pen=COLOR_LIGHTGREEN},
+                {text='(up/down or click):', pen=COLOR_GREY},
+            },
+        },
+        widgets.Divider{
+            frame={t=1, l=0, w=39, h=1},
+            frame_style=gui.FRAME_THIN,
+            frame_style_l=false,
+            frame_style_r=false,
         },
         widgets.List{
             view_id='list',
-            frame={t=2, l=0, w=40, b=0},
+            frame={t=2, l=0, w=39, b=0},
             text_pen=COLOR_GREY,
             cursor_pen={fg=COLOR_BLACK, bg=COLOR_LIGHTCYAN},
             on_select=function() self:show_mod() end,
+        },
+        widgets.Divider{
+            frame={t=0, l=40, w=1, b=0},
+            frame_style=gui.FRAME_THIN,
+            frame_style_t=false,
+            frame_style_b=false,
         },
         widgets.Label{
             view_id='info',
@@ -1595,11 +1669,17 @@ end
 function ModInfoPage:refresh_list()
     local vs = get_mod_screen()
     self.mods = vs and read_active(vs) or {}
+    local probs = vs and mod_problems(vs) or {}
     local sel = self.subviews.list:getSelected()
     local choices = {}
     for _, m in ipairs(self.mods) do
-        -- plain text so the list's selection highlight shows
-        table.insert(choices, {text=('%2d %s'):format(m.pos, m.name)})
+        local prob = probs[m.id]
+        local prob_pen = prob and (prob.severity == 'red' and COLOR_LIGHTRED or COLOR_YELLOW) or nil
+        -- use dpen so the list's cyan selection highlight still shows
+        table.insert(choices, {text={
+            {text=('%2d '):format(m.pos), dpen=prob_pen or COLOR_BROWN},
+            {text=m.name, dpen=prob_pen or (m.vanilla and COLOR_GREY or COLOR_LIGHTGREEN)},
+        }})
     end
     self.subviews.list:setChoices(choices, sel)
 end
@@ -1626,13 +1706,16 @@ function ModInfoPage:show_mod()
         local state, pen = 'ok', COLOR_LIGHTGREEN
         if not o then state, pen = 'MISSING', COLOR_LIGHTRED
         elseif not ok then state, pen = 'WRONG', COLOR_YELLOW end
-        r.item(pen, {{text, COLOR_GREY}, {' ' .. where(id), COLOR_WHITE}, {' - ' .. state, pen}})
+        r.item(pen, {{text, COLOR_LIGHTCYAN}, {' ' .. where(id), COLOR_WHITE}, {' - ' .. state, pen}})
     end
 
-    r.line({{m.name, COLOR_YELLOW}, {'  ' .. m.displayed_version, COLOR_GREY}}, '')
-    r.line({{('id %s, position #%d%s'):format(m.id, m.pos, m.vanilla and ', vanilla' or ''), COLOR_DARKGREY}}, '')
-    if m.author and m.author ~= '' then r.line({{'by ', COLOR_DARKGREY}, {m.author, COLOR_GREY}}, '') end
-    if m.steam_id ~= 0 then r.line({{WORKSHOP_ITEM:format(tostring(m.steam_id)), COLOR_DARKGREY}}, '') end
+    r.line({{m.name, COLOR_YELLOW}, {'  ' .. m.displayed_version, COLOR_WHITE}}, '')
+    local meta = {{'id ', COLOR_GREY}, {m.id, COLOR_LIGHTCYAN}, {', position ', COLOR_GREY},
+        {('#' .. tostring(m.pos)), COLOR_LIGHTGREEN}}
+    if m.vanilla then table.insert(meta, {', vanilla', COLOR_BROWN}) end
+    r.line(meta, '')
+    if m.author and m.author ~= '' then r.line({{'by ', COLOR_GREY}, {m.author, COLOR_LIGHTCYAN}}, '') end
+    if m.steam_id ~= 0 then r.line({{WORKSHOP_ITEM:format(tostring(m.steam_id)), COLOR_CYAN}}, '') end
 
     -- the mod's own description, read from its info.txt (the game's copy is
     -- cut off at the first ':' in the text)
@@ -1648,21 +1731,30 @@ function ModInfoPage:show_mod()
     for _, id in ipairs(m.before) do local o = by_id[id]; rule('Must load before', id, o and o.pos > m.pos) end
     for _, id in ipairs(m.requires) do rule('Requires', id, true) end
     for _, id in ipairs(m.conflicts) do
-        r.item(by_id[id] and COLOR_LIGHTRED or COLOR_DARKGREY, {{'Conflicts with', COLOR_GREY},
-            {' ' .. where(id), COLOR_WHITE}, {by_id[id] and ' - BOTH ACTIVE' or '', COLOR_LIGHTRED}})
+        local active = by_id[id] ~= nil
+        r.item(active and COLOR_LIGHTRED or COLOR_DARKGREY, {
+            {'Conflicts with', active and COLOR_LIGHTRED or COLOR_GREY},
+            {' ' .. where(id), active and COLOR_WHITE or COLOR_GREY},
+            {active and ' - BOTH ACTIVE' or '', COLOR_LIGHTRED},
+        })
     end
     if r.items == 0 then r.line{{'This mod declares no rules.', COLOR_GREY}} end
 
     r.section('Other mods\' rules about it')
     for _, o in ipairs(self.mods) do
         for _, id in ipairs(o.after) do
-            if id == m.id then r.item(COLOR_CYAN, {{modpos(o), COLOR_WHITE}, {' must load after this one', COLOR_GREY}}) end
+            if id == m.id then r.item(COLOR_LIGHTCYAN, {{modpos(o), COLOR_WHITE}, {' must load after this one', COLOR_LIGHTCYAN}}) end
         end
         for _, id in ipairs(o.before) do
-            if id == m.id then r.item(COLOR_CYAN, {{modpos(o), COLOR_WHITE}, {' must load before this one', COLOR_GREY}}) end
+            if id == m.id then r.item(COLOR_LIGHTCYAN, {{modpos(o), COLOR_WHITE}, {' must load before this one', COLOR_LIGHTCYAN}}) end
         end
         for _, id in ipairs(o.requires) do
-            if id == m.id then r.item(COLOR_CYAN, {{modpos(o), COLOR_WHITE}, {' requires this one', COLOR_GREY}}) end
+            if id == m.id then r.item(COLOR_LIGHTGREEN, {{modpos(o), COLOR_WHITE}, {' requires this one', COLOR_LIGHTGREEN}}) end
+        end
+        for _, id in ipairs(o.conflicts) do
+            if id == m.id and o.id ~= m.id then
+                r.item(COLOR_LIGHTRED, {{modpos(o), COLOR_WHITE}, {' conflicts with this one', COLOR_LIGHTRED}})
+            end
         end
     end
     if r.items == 0 then r.line{{'None.', COLOR_GREY}} end
@@ -1673,8 +1765,12 @@ function ModInfoPage:show_mod()
         r.line{{'Not scanned yet.', COLOR_GREY}}
     else
         local function count(s) local n = 0 for _ in pairs(s) do n = n + 1 end return n end
-        r.line{{('Defines %s and %s, edits %s.'):format(plural(count(data.defs), 'object'),
-            plural(count(data.gfx), 'graphic'), plural(count(data.edits), 'object')), COLOR_GREY}}
+        r.line{
+            {'Defines ', COLOR_GREY}, {plural(count(data.defs), 'object'), COLOR_LIGHTCYAN},
+            {' and ', COLOR_GREY}, {plural(count(data.gfx), 'graphic'), COLOR_YELLOW},
+            {', edits ', COLOR_GREY}, {plural(count(data.edits), 'object'), COLOR_LIGHTGREEN},
+            {'.', COLOR_GREY},
+        }
         local ok, result = pcall(scan_if_cached, vs)
         if ok and result then
             for _, s in ipairs(result.suggestions) do
@@ -1686,7 +1782,7 @@ function ModInfoPage:show_mod()
             for _, d in ipairs(result.duplicates) do
                 if d.a.id == m.id or d.b.id == m.id then
                     local other = d.a.id == m.id and d.b or d.a
-                    r.item(COLOR_LIGHTRED, {{'Duplicate objects with ', COLOR_GREY}, {modpos(other), COLOR_WHITE}})
+                    r.item(COLOR_LIGHTRED, {{'Duplicate objects with ', COLOR_LIGHTRED}, {modpos(other), COLOR_WHITE}})
                 end
             end
             for _, h in ipairs(result.hidden) do
@@ -1703,10 +1799,455 @@ function ModInfoPage:show_mod()
 end
 
 ---------------------------------------------------------------------------
+-- Mods tab: add, remove, filter, and reorder mods
+
+ModsPage = defclass(nil, widgets.Panel)
+ModsPage.ATTRS{window=DEFAULT_NIL}
+
+local COL_W = 33
+local DIV1_L = COL_W + 1
+local COL2_L = COL_W + 3
+local DIV2_L = 2 * COL_W + 4
+local COL3_L = 2 * COL_W + 6
+local ACTIVE_PEN = {fg=COLOR_BLACK, bg=COLOR_LIGHTCYAN} -- selection highlight in the active list
+
+function ModsPage:set_side(side)
+    self.side = side
+    self:update_info()
+end
+
+function ModsPage:is_typing()
+    return self.subviews.filter and self.subviews.filter.focus or false
+end
+
+function ModsPage:init()
+    self.side = 'left'
+    self.filter_text = ''
+    local function list(view_id, l, side)
+        return widgets.List{
+            view_id=view_id,
+            frame={t=4, l=l, w=COL_W, b=2},
+            text_pen=COLOR_WHITE,
+            cursor_pen=ACTIVE_PEN,
+            on_select=function() self:update_info() end,
+            on_double_click=function() self:set_side(side) self:move() end,
+        }
+    end
+    local function hdiv(frame)
+        return widgets.Divider{
+            frame=frame,
+            frame_style=gui.FRAME_THIN,
+            frame_style_l=false,
+            frame_style_r=false,
+        }
+    end
+    local function vdiv(l)
+        return widgets.Divider{
+            frame={t=1, l=l, w=1, b=1},
+            frame_style=gui.FRAME_THIN,
+            interior=true,
+        }
+    end
+    self:addviews{
+        widgets.EditField{
+            view_id='filter',
+            frame={t=0, l=0, w=DIV2_L - 1, h=1},
+            key='CUSTOM_F',
+            label_text='Filter: ',
+            ignore_keys={'SELECT', 'LEAVESCREEN'},
+            on_change=function(text)
+                self.filter_text = text or ''
+                self:refresh_lists(1, 1)
+            end,
+        },
+        hdiv{t=1, l=0, r=0, h=1},
+        widgets.Label{frame={t=2, l=0}, text={
+            {text=function() return self.side == 'left' and (LINK_ARROW .. ' ') or '' end, pen=COLOR_YELLOW},
+            {text='Installed, not loaded', pen=COLOR_LIGHTCYAN},
+            {text=function() return (' (%d)'):format(#(self.available or {})) end, pen=COLOR_WHITE},
+        }},
+        widgets.Label{frame={t=2, l=COL2_L}, text={
+            {text=function() return self.side == 'right' and (LINK_ARROW .. ' ') or '' end, pen=COLOR_YELLOW},
+            {text='Loaded, in load order', pen=COLOR_LIGHTGREEN},
+            {text=function() return (' (%d)'):format(#(self.active or {})) end, pen=COLOR_WHITE},
+        }},
+        widgets.Label{frame={t=2, l=COL3_L}, text={{text='About this mod', pen=COLOR_YELLOW}}},
+        hdiv{t=3, l=0, r=0, h=1},
+        list('left', 0, 'left'),
+        list('right', COL2_L, 'right'),
+        widgets.Label{view_id='info', frame={t=4, l=COL3_L, r=0, b=2}, auto_height=false, text=''},
+        hdiv{b=1, l=0, r=0, h=1},
+        vdiv(DIV1_L),
+        vdiv(DIV2_L),
+        widgets.Divider{frame={t=3, l=DIV1_L, w=1, h=1}, frame_style=gui.FRAME_THIN},
+        widgets.Divider{frame={t=3, l=DIV2_L, w=1, h=1}, frame_style=gui.FRAME_THIN},
+        widgets.Label{frame={b=0, l=0}, text={
+            {text='Enter', pen=COLOR_LIGHTGREEN}, {text=': ', pen=COLOR_GREY},
+            {text=function() return self.side == 'left' and 'load  ' or 'unload' end,
+                pen=function() return self.side == 'left' and COLOR_LIGHTCYAN or COLOR_YELLOW end},
+            {text='  ', pen=COLOR_GREY},
+            {text='Left/Right', pen=COLOR_LIGHTGREEN}, {text=': switch', pen=COLOR_GREY},
+        }},
+        widgets.HotkeyLabel{
+            frame={b=0, l=36},
+            key='CUSTOM_W',
+            label='Move up',
+            auto_width=true,
+            enabled=function() return self:can_reorder(-1) end,
+            on_activate=function() self:move_in_order(-1) end,
+        },
+        widgets.HotkeyLabel{
+            frame={b=0, l=48},
+            key='CUSTOM_S',
+            label='Move down',
+            auto_width=true,
+            enabled=function() return self:can_reorder(1) end,
+            on_activate=function() self:move_in_order(1) end,
+        },
+        widgets.HotkeyLabel{
+            frame={b=0, l=63},
+            key='CUSTOM_SHIFT_A',
+            label='Add all',
+            auto_width=true,
+            enabled=function() return self:can_add_all() end,
+            on_activate=function() self:add_all() end,
+        },
+        widgets.HotkeyLabel{
+            frame={b=0, l=76},
+            key='CUSTOM_SHIFT_X',
+            label='Remove all',
+            auto_width=true,
+            enabled=function() return self:can_remove_all() end,
+            on_activate=function() self:remove_all() end,
+        },
+    }
+end
+
+-- both lists from the game's mod screen, filtered by self.filter_text
+function ModsPage:read()
+    local vs = get_mod_screen()
+    self.available, self.active = {}, {}
+    self.available_id_counts = {}
+    if not vs then return end
+    local q = (self.filter_text or ''):lower()
+    local function matches(m)
+        if q == '' then return true end
+        return m.name:lower():find(q, 1, true) ~= nil
+            or (m.id and m.id:lower():find(q, 1, true) ~= nil)
+            or (m.author and m.author:lower():find(q, 1, true) ~= nil)
+    end
+    local all_avail = {}
+    for i, hdr in ipairs(vs.available_mod_header) do
+        local num_ver = vs.available_numeric_version[i]
+        local m = {
+            id=hdr.id, name=hdr_name(hdr), author=hdr.author, version=hdr.displayed_version,
+            numeric_version=num_ver,
+            description=hdr.description, path=hdr.absolute_path,
+            vanilla=hdr.flags.vanilla or vs.available_src_dir[i]:startswith('data/vanilla'),
+            key=modkey(hdr.id, num_ver),
+        }
+        self.available_id_counts[m.id] = (self.available_id_counts[m.id] or 0) + 1
+        if matches(m) then table.insert(all_avail, m) end
+    end
+    table.sort(all_avail, function(a, b)
+        if a.vanilla ~= b.vanilla then return not a.vanilla end -- your mods first, then vanilla
+        local al, bl = a.name:lower(), b.name:lower()
+        if al ~= bl then return al < bl end
+        return (a.numeric_version or 0) > (b.numeric_version or 0)
+    end)
+    self.available = all_avail
+    for _, m in ipairs(read_active(vs)) do
+        if matches(m) then table.insert(self.active, m) end
+    end
+end
+
+local function find_mod_index(mods, target, fallback_idx)
+    if type(target) == 'string' then
+        for i, m in ipairs(mods) do
+            if m.key == target then return i end
+        end
+    elseif type(target) == 'number' then
+        return math.max(1, math.min(target, math.max(1, #mods)))
+    end
+    return math.max(1, math.min(fallback_idx or 1, math.max(1, #mods)))
+end
+
+function ModsPage:refresh_lists(select_left, select_right)
+    local l, r = self.subviews.left, self.subviews.right
+    local prev_l_idx, prev_r_idx = l:getSelected() or 1, r:getSelected() or 1
+    local prev_l_key = select_left == nil and self.available and self.available[prev_l_idx] and self.available[prev_l_idx].key or nil
+    local prev_r_key = select_right == nil and self.active and self.active[prev_r_idx] and self.active[prev_r_idx].key or nil
+
+    self:read()
+    local vs = get_mod_screen()
+    self.problems = vs and mod_problems(vs) or {}
+    local counts = self.available_id_counts or {}
+    local function rows(mods, numbered)
+        local list_side = numbered and 'right' or 'left'
+        local function seg(text, color)
+            -- highlight only in the active list; inactive list keeps its normal row colors
+            return {
+                text=text,
+                dpen=color,
+                pen=function() return self.side == list_side and ACTIVE_PEN or color end,
+            }
+        end
+        local out = {}
+        for _, m in ipairs(mods) do
+            local segs = {}
+            local prob = numbered and self.problems[m.id] or nil
+            local prob_pen = prob and (prob.severity == 'red' and COLOR_LIGHTRED or COLOR_YELLOW) or nil
+            if numbered then
+                table.insert(segs, seg(('%2d '):format(m.pos), prob_pen or COLOR_BROWN))
+            end
+            local name_pen = prob_pen or (m.vanilla and COLOR_GREY or (numbered and COLOR_LIGHTGREEN or COLOR_LIGHTCYAN))
+            table.insert(segs, seg(m.name, name_pen))
+            if not numbered and (counts[m.id] or 0) > 1 and m.version and m.version ~= '' then
+                table.insert(segs, seg(' (' .. m.version .. ')', COLOR_YELLOW))
+            end
+            table.insert(out, {text=segs})
+        end
+        if #out == 0 then out = {{text={seg('(none)', COLOR_DARKGREY)}}} end
+        return out
+    end
+    local l_sel = find_mod_index(self.available, select_left or prev_l_key, prev_l_idx)
+    local r_sel = find_mod_index(self.active, select_right or prev_r_key, prev_r_idx)
+    l:setChoices(rows(self.available, false), l_sel)
+    r:setChoices(rows(self.active, true), r_sel)
+    self:update_info()
+end
+
+function ModsPage:postUpdateLayout()
+    if not self.done_first then
+        self.done_first = true
+        self:refresh_lists(1, 1)
+        self:set_side('left')
+    else
+        local pending = self.pending_select
+        self.pending_select = nil
+        if pending then
+            self:refresh_lists(pending[1], pending[2])
+        else
+            self:refresh_lists()
+        end
+    end
+end
+
+function ModsPage:current()
+    local list = self.side == 'left' and self.subviews.left or self.subviews.right
+    local mods = self.side == 'left' and self.available or self.active
+    local idx = list:getSelected()
+    return mods and mods[idx], idx
+end
+
+-- plain description: name, who made it, version, what it does
+function ModsPage:update_info()
+    local m = self:current()
+    local info = self.subviews.info
+    if not m then
+        self.last_info_key = nil
+        info:setText({{text='Pick a mod to see what it does.', pen=COLOR_GREY}})
+        return
+    end
+    local width = math.max(20, (info.frame_body and info.frame_body.width or 36) - 3)
+    local t = {}
+    add_lines(t, m.name, COLOR_YELLOW, width)
+    if m.author and m.author ~= '' then
+        add_segs(t, '', {{'by ', COLOR_GREY}, {m.author, COLOR_LIGHTCYAN}}, width)
+    end
+    local ver = m.displayed_version or m.version
+    if ver and ver ~= '' then
+        add_segs(t, '', {{'version ', COLOR_GREY}, {ver, COLOR_WHITE}}, width)
+    end
+    if m.vanilla then add_lines(t, 'Part of the base game.', COLOR_BROWN, width) end
+    table.insert(t, NEWLINE)
+    add_lines(t, self.side == 'left' and 'Status: Not loaded' or ('Status: Loaded at #%d'):format(m.pos or 0),
+        self.side == 'left' and COLOR_LIGHTCYAN or COLOR_LIGHTGREEN, width)
+    local prob = self.side == 'right' and self.problems and self.problems[m.id] or nil
+    if prob then
+        for _, reason in ipairs(prob.reasons) do
+            add_lines(t, '! ' .. reason.text, reason.pen, width)
+        end
+    end
+    table.insert(t, NEWLINE)
+    local desc = (full_description(m.path) or m.description or ''):gsub('%s+', ' '):gsub('^ ', ''):gsub(' $', '')
+    add_lines(t, desc ~= '' and desc or 'No description.', desc ~= '' and COLOR_WHITE or COLOR_DARKGREY, width)
+    local changed = self.last_info_key ~= m.key
+    self.last_info_key = m.key
+    info:setText(t)
+    if changed then info.start_line_num = 1 end
+end
+
+-- load the selected mod (left) or unload it (right)
+function ModsPage:move()
+    local vs = get_mod_screen()
+    local m, idx = self:current()
+    if not vs or not m then return end
+    local keys = current_keys(vs)
+    if self.side == 'left' then
+        table.insert(keys, m.key)
+        commit(vs, keys, 'load ' .. m.name)
+        -- put it where its own rules say, without a second undo step
+        local ok, moved = reorder(vs, nil, 'load ' .. m.name, true)
+        self.pending_select = {idx, m.key}
+        self.window:set_message(('Loaded %s.%s'):format(m.name,
+            (ok and #moved > 0) and ' Placed it by the load-order rules.' or ''), COLOR_GREEN)
+    else
+        for i, k in ipairs(keys) do if k == m.key then table.remove(keys, i) break end end
+        commit(vs, keys, 'unload ' .. m.name)
+        self.pending_select = {m.key, idx}
+        self.window:set_message(('Unloaded %s.'):format(m.name), COLOR_GREEN)
+    end
+end
+
+function ModsPage:can_reorder(delta)
+    if self.side ~= 'right' then return false end
+    local vs = get_mod_screen()
+    local m = self:current()
+    if not vs or not m or not m.pos then return false end
+    local total = #vs.object_load_order_mod_header
+    local target = m.pos + delta
+    return target >= 1 and target <= total
+end
+
+function ModsPage:move_in_order(delta)
+    if not self:can_reorder(delta) then return end
+    local vs = get_mod_screen()
+    local m = self:current()
+    local keys = current_keys(vs)
+    local pos = m.pos
+    local target = pos + delta
+    keys[pos], keys[target] = keys[target], keys[pos]
+    commit(vs, keys, ('move %s %s'):format(m.name, delta < 0 and 'up' or 'down'))
+    self.pending_select = {nil, m.key}
+    self.window:set_message(('Moved %s %s to #%d.'):format(m.name, delta < 0 and 'up' or 'down', target), COLOR_GREEN)
+end
+
+function ModsPage:can_add_all()
+    return self.available ~= nil and #self.available > 0
+end
+
+function ModsPage:add_all()
+    local vs = get_mod_screen()
+    if not vs or not self:can_add_all() then return end
+    local keys = current_keys(vs)
+    local seen_ids = {}
+    for _, k in ipairs(keys) do seen_ids[key_id(k)] = true end
+    local added = 0
+    -- self.available is sorted newest numeric_version first per id
+    for _, m in ipairs(self.available) do
+        if m.id ~= SELF_ID and not seen_ids[m.id] then
+            seen_ids[m.id] = true
+            table.insert(keys, m.key)
+            added = added + 1
+        end
+    end
+    if added == 0 then return end
+    commit(vs, keys, 'add all mods')
+    local ok, moved = reorder(vs, nil, 'add all mods', true)
+    self.pending_select = {1, nil}
+    self.window:set_message(('Added %s.%s (u undoes it)'):format(plural(added, 'mod'),
+        (ok and #moved > 0) and ' Placed by load-order rules.' or ''), COLOR_GREEN)
+end
+
+function ModsPage:can_remove_all()
+    for _, m in ipairs(self.active or {}) do
+        if not m.vanilla then return true end
+    end
+    return false
+end
+
+function ModsPage:remove_all()
+    local vs = get_mod_screen()
+    if not vs or not self:can_remove_all() then return end
+    local drop = {}
+    local removed = 0
+    for _, m in ipairs(self.active or {}) do
+        if not m.vanilla then
+            drop[m.key] = true
+            removed = removed + 1
+        end
+    end
+    if removed == 0 then return end
+    local keys = {}
+    for _, k in ipairs(current_keys(vs)) do
+        if not drop[k] then table.insert(keys, k) end
+    end
+    commit(vs, keys, 'remove all mods')
+    self.pending_select = {1, 1}
+    self.window:set_message(('Removed %s (kept vanilla). (u undoes it)'):format(plural(removed, 'mod')), COLOR_GREEN)
+end
+
+function ModsPage:onInput(keys)
+    local l, r, info, filter = self.subviews.left, self.subviews.right, self.subviews.info, self.subviews.filter
+    if filter.focus then
+        if keys._MOUSE_L or keys._MOUSE_L_DOWN then
+            if not filter:getMousePos() then
+                filter:setFocus(false)
+                if l:getMousePos() then self:set_side('left')
+                elseif r:getMousePos() then self:set_side('right') end
+                return ModsPage.super.onInput(self, keys)
+            end
+            return filter:onInput(keys)
+        end
+        if keys.SELECT then
+            filter:setFocus(false)
+            return true
+        end
+        if keys.LEAVESCREEN then
+            if self.filter_text ~= '' then
+                filter:setText('')
+            end
+            filter:setFocus(false)
+            return true
+        end
+        return filter:onInput(keys)
+    end
+    if keys._MOUSE_L or keys._MOUSE_L_DOWN then
+        if l:getMousePos() then self:set_side('left')
+        elseif r:getMousePos() then self:set_side('right') end
+        return ModsPage.super.onInput(self, keys)
+    end
+    if keys.CONTEXT_SCROLL_UP or keys.CONTEXT_SCROLL_DOWN
+            or keys.CONTEXT_SCROLL_PAGEUP or keys.CONTEXT_SCROLL_PAGEDOWN
+            or keys.STANDARDSCROLL_PAGEUP or keys.STANDARDSCROLL_PAGEDOWN then
+        if info:getMousePos() then return info:onInput(keys) end
+        if l:getMousePos() then return l:onInput(keys) end
+        if r:getMousePos() then return r:onInput(keys) end
+    end
+    if keys.CUSTOM_F then
+        filter:setFocus(true)
+        return true
+    end
+    if keys.CUSTOM_W then
+        if self:can_reorder(-1) then self:move_in_order(-1) end
+        return true
+    end
+    if keys.CUSTOM_S then
+        if self:can_reorder(1) then self:move_in_order(1) end
+        return true
+    end
+    if keys.CUSTOM_SHIFT_A then
+        if self:can_add_all() then self:add_all() end
+        return true
+    end
+    if keys.CUSTOM_SHIFT_X then
+        if self:can_remove_all() then self:remove_all() end
+        return true
+    end
+    if keys.KEYBOARD_CURSOR_LEFT then self:set_side('left') return true end
+    if keys.KEYBOARD_CURSOR_RIGHT then self:set_side('right') return true end
+    if keys.SELECT then self:move() return true end
+    -- up/down etc. only move the list you're in
+    local active = self.side == 'left' and l or r
+    if active:onInput(keys) then return true end
+    return false
+end
+
+---------------------------------------------------------------------------
 -- main window with tabs
 
-local TABS = {'Overview', 'Problems', 'Hidden conflicts', 'Suggestions', 'Versions', 'Mod info'}
-local TAB_MODINFO = 6
+local TABS = {'Overview', 'Mods', 'Problems', 'Hidden conflicts', 'Suggestions', 'Versions', 'Mod info'}
 
 LoadOrderWindow = defclass(nil, widgets.Window)
 LoadOrderWindow.ATTRS{
@@ -1740,6 +2281,7 @@ function LoadOrderWindow:init()
             frame={t=3, l=0, r=0, b=5},
             subviews={
                 OverviewPage{window=self},
+                ModsPage{window=self},
                 ProblemsPage{window=self, buttons={
                     {key='CUSTOM_F', label='Fix order', on_activate=function() show(fix()) end},
                     {key='CUSTOM_C', label='Remove conflicts', on_activate=function() remove_conflicts_ui(on_result) end},
@@ -1786,6 +2328,7 @@ function LoadOrderWindow:init()
             on_activate=function() self:save_preset() end},
         widgets.HotkeyLabel{frame={b=0, l=43}, key='CUSTOM_R', label='Rescan', auto_width=true,
             on_activate=function() self:start_scan(true) end},
+        widgets.Label{frame={b=1, r=0}, auto_width=true, text={{text='v' .. VERSION, pen=COLOR_GREY}}},
         widgets.HotkeyLabel{frame={b=0, r=0}, key='LEAVESCREEN', label='Close', auto_width=true,
             on_activate=function() self.parent_view:dismiss() end},
     }
@@ -1846,6 +2389,19 @@ end
 function LoadOrderWindow:set_message(msg, pen)
     self.message, self.message_pen = msg, pen
     self:refresh()
+end
+
+function LoadOrderWindow:onInput(keys)
+    local pages = self.subviews.pages
+    local page = pages.subviews[pages:getSelected()]
+    if page and page.is_typing and page:is_typing() then
+        if page:onInput(keys) then return true end
+        if not page:is_typing() then
+            return LoadOrderWindow.super.onInput(self, keys)
+        end
+        return false
+    end
+    return LoadOrderWindow.super.onInput(self, keys)
 end
 
 function LoadOrderWindow:refresh()
@@ -1966,7 +2522,8 @@ LoadOrderOverlay.ATTRS{
     frame_background=gui.CLEAR_PEN,
 }
 
-local cache = {tick=0, counts=nil}
+STATE.overlay_cache = STATE.overlay_cache or {tick=0, counts=nil}
+local cache = STATE.overlay_cache
 
 local function get_counts()
     local now = dfhack.getTickCount()
