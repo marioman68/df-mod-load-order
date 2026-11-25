@@ -1,6 +1,13 @@
 # Mod Load Order (DFHack)
 
-![Overview tab](preview.png)
+<p align="center">
+  <img src="preview.png" alt="Mod Load Order" width="320">
+</p>
+
+<h1 align="center">Mod Load Order</h1>
+
+<p align="center"><b>A DFHack tool that checks and fixes your Dwarf Fortress mod list.</b><br>
+<a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3844479443">Steam Workshop</a></p>
 
 A [DFHack](https://store.steampowered.com/app/2346660/DFHack__Dwarf_Fortress_Modding_Engine/) tool for
 Dwarf Fortress (Steam) that checks your active mod list on the **Create world → Mods** screen and helps fix it.
