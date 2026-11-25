@@ -1,5 +1,7 @@
 # Mod Load Order (DFHack)
 
+![Overview tab](preview.png)
+
 A [DFHack](https://store.steampowered.com/app/2346660/DFHack__Dwarf_Fortress_Modding_Engine/) tool for
 Dwarf Fortress (Steam) that checks your active mod list on the **Create world → Mods** screen and helps fix it.
 
