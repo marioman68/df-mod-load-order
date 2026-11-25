@@ -1,4 +1,4 @@
-# Mod Load Order (DFHack)
+<h1 align="center">Mod Load Order (DFHack)</h1>
 
 <p align="center">
   <img src="preview.png" alt="Mod Load Order" width="320">
